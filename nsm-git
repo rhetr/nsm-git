@@ -6,7 +6,7 @@ import git
 
 class NSMGit(liblo.Server):
     def __init__(self):
-        liblo.Server.__init__(self, 1234)
+        liblo.Server.__init__(self)
         self.add_method("/reply", 'ssss', self.handshake_callback)
         self.add_method("/nsm/client/open", 'sss', self.open_callback)
         self.add_method("/nsm/client/save", None, self.save_callback)
@@ -22,7 +22,7 @@ class NSMGit(liblo.Server):
         
 
     def handshake(self):
-        application_name = "nsm_git"
+        application_name = "nsm-git"
         capabilities = ":message:"
         executable_name = os.path.realpath(__file__)
         pid = os.getpid()
@@ -76,7 +76,7 @@ class NSMGit(liblo.Server):
 
         if changed:
             try:
-                self.repo.git.commit(m="nsm_git commit")
+                self.repo.git.commit(m="nsm-git commit")
                 print 'committed'
             except git.exc.GitCommandError, err:
                 print str(err)
