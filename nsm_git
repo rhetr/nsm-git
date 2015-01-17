@@ -1,0 +1,110 @@
+#!/usr/bin/env python
+
+import liblo, sys, os
+import git
+
+
+class NSMGit(liblo.Server):
+    def __init__(self):
+        liblo.Server.__init__(self, 1234)
+        self.add_method("/reply", 'ssss', self.handshake_callback)
+        self.add_method("/nsm/client/open", 'sss', self.open_callback)
+        self.add_method("/nsm/client/save", None, self.save_callback)
+        self.add_method("/reply", 'ss', self.server_save_callback)
+        self.add_method(None, None, self.fallback)
+        self.project_dir = None
+
+        self.NSM_URL = os.getenv('NSM_URL')
+        if not self.NSM_URL:
+           sys.exit()
+
+        self.handshake()
+        
+
+    def handshake(self):
+        application_name = "nsm_git"
+        capabilities = ":message:"
+        executable_name = os.path.realpath(__file__)
+        pid = os.getpid()
+        api_version_major = 1
+        api_version_minor = 2
+
+        message = liblo.Message("/nsm/server/announce", application_name, capabilities, executable_name, api_version_major, api_version_minor, pid)
+        liblo.send(self.NSM_URL, message)
+
+        while not self.project_dir:
+            self.recv()
+        print self.project_dir
+
+    def handshake_callback(self, path, args):
+        print 'received handshake'
+
+    def open_callback(self, path, args):
+        self.project_dir, self.display_name, self.client_id = args
+        self.project_dir = os.path.split(self.project_dir)[0]
+        
+        print 'attempting to commit'
+        self.save()
+        message = liblo.Message('/reply', "/nsm/client/open", 'done')
+        liblo.send(self.NSM_URL, message)
+        
+    def check_repo(self):
+        try:
+            self.repo = git.Repo(self.project_dir)
+            print 'opened git repo'
+        except git.exc.InvalidGitRepositoryError:
+            self.repo = git.Repo.init(self.project_dir)
+            print 'created git repo'
+
+    def save(self):
+        changed = False
+        self.check_repo()
+
+        if not os.path.isfile(self.project_dir+'/.gitignore'):
+            with open(self.project_dir+'/.gitignore', 'wb') as gitignore:
+                gitignore.write('*.swp\n*.lock')
+
+        if self.repo.is_dirty(untracked_files=True):
+            print 'adding untracked files'
+            map(self.repo.git.add, self.repo.untracked_files)
+            changed = True
+
+        if self.repo.git.diff(None):
+            print 'changed files'
+            self.repo.git.add([diff.a_blob.path for diff in self.repo.index.diff(None)])
+            changed = True
+
+        if changed:
+            try:
+                self.repo.git.commit(m="nsm_git commit")
+                print 'committed'
+            except git.exc.GitCommandError, err:
+                print str(err)
+        else:
+            print 'nothing to be done'
+
+    def save_callback(self, path, args):
+        #try to prevent from committing until all other programs have saved
+        print 'saving'
+        self.save()
+        message = liblo.Message('/reply', "/nsm/client/save", 'saved')
+        liblo.send(self.NSM_URL, message)
+
+
+    def server_save_callback(self, path, args):
+        if args[0] == "/nsm/server/save" and args[1] == "Saved.":
+            self.save()
+
+    def fallback(self, path, args, types, src):
+        print "got unknown message '%s' from '%s'" % (path, src.url)
+        for a, t in zip(args, types):
+            print "argument of type '%s': %s" % (t, a)
+
+try:
+    nsm_git = NSMGit()
+except liblo.ServerError, err:
+    print str(err)
+    sys.exit()
+
+while True:
+    nsm_git.recv(100)
