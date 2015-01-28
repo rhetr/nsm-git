@@ -11,9 +11,11 @@ class NSMGit(liblo.Server):
         self.add_method("/nsm/client/open", 'sss', self.open_callback)
         self.add_method("/nsm/client/save", None, self.save_callback)
         self.add_method("/reply", 'ss', self.server_save_callback)
+        self.add_method("/error", 'sis', self.error_callback)
         self.add_method(None, None, self.fallback)
         self.session_dir = None
         self.server_saved = False
+        self.exit = False
         self.NSM_URL = os.getenv('NSM_URL')
 
         if not self.NSM_URL:
@@ -61,6 +63,11 @@ class NSMGit(liblo.Server):
             print 'server callback received.'
             self.server_saved = True
 
+    def error_callback(self, path, args):
+        if args[1] == -6:
+            print 'no session open'
+            self.exit = True
+
     def fallback(self, path, args, types, src):
         print "got unknown message '%s' from '%s'" % (path, src.url)
         for a, t in zip(args, types):
@@ -82,6 +89,9 @@ class NSMGit(liblo.Server):
 
         while not self.session_dir:
             self.recv()
+            if self.exit:
+                sys.exit()
+
 
     # ---------------------------------------------------------------------
     # save methods
