@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 
-import liblo, sys, os, time, datetime
+import liblo, sys, os, time, datetime, subprocess, signal
 import git
+
 
 
 class NSMGit(liblo.Server):
@@ -10,12 +11,15 @@ class NSMGit(liblo.Server):
         self.add_method("/reply", 'ssss', self.handshake_callback)
         self.add_method("/nsm/client/open", 'sss', self.open_callback)
         self.add_method("/nsm/client/save", None, self.save_callback)
+        self.add_method("/nsm/client/show_optional_gui", None, self.show_gui_callback)
+        self.add_method("/nsm/client/hide_optional_gui", None, self.hide_gui_callback)
         self.add_method("/reply", 'ss', self.server_save_callback)
         self.add_method("/error", 'sis', self.error_callback)
         self.add_method(None, None, self.fallback)
         self.session_dir = None
         self.server_saved = False
         self.exit = False
+        self.app = None
         self.NSM_URL = os.getenv('NSM_URL')
 
         if not self.NSM_URL:
@@ -68,6 +72,18 @@ class NSMGit(liblo.Server):
             print 'no session open'
             self.exit = True
 
+    def show_gui_callback(self, path, args):
+        if not self.app:
+            self.app = subprocess.Popen([os.path.join(self.executable_dir, 'nsm-git-ui'), self.session_dir],
+                                        stdout=subprocess.PIPE,
+                                        preexec_fn=os.setsid)
+
+    def hide_gui_callback(self, path, args):
+        print 'hiding gui'
+        os.killpg(self.app, signal.SIGTERM)
+        self.app = None
+
+
     def fallback(self, path, args, types, src):
         print "got unknown message '%s' from '%s'" % (path, src.url)
         for a, t in zip(args, types):
@@ -78,8 +94,9 @@ class NSMGit(liblo.Server):
 
     def handshake(self):
         application_name = "nsm-git"
-        capabilities = ":message:"
+        capabilities = ":message:optional-gui:"
         executable_name = os.path.realpath(__file__)
+        self.executable_dir = os.path.dirname(executable_name)
         pid = os.getpid()
         api_version_major = 1
         api_version_minor = 2
@@ -122,7 +139,8 @@ class NSMGit(liblo.Server):
                     print 'alert {} removed from session'.format(entry)
                     entries_to_remove.append(entry)
         if entries_to_remove:
-            self.repo.index.remove(entries_to_remove, working_tree=True)
+            print 'a'
+            self.repo.index.remove(entries_to_remove, working_tree=True, force=True)
             return True
         else:
             return False
