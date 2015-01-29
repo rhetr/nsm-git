@@ -32,19 +32,38 @@ class CommitList(QtGui.QListWidget):
 class MainWindow(QtGui.QWidget):
     def __init__(self, repo):
         QtGui.QWidget.__init__(self)
-        self.list = CommitList(git.Repo(repo))
-        self.tabs = QtGui.QTabWidget()
         self.curview = None
 
-        self.list.itemActivated.connect(self.callback)
+        self.list = CommitList(git.Repo(repo))
+        self.commit_message = QtGui.QTextEdit()
+        self.commit_message.setReadOnly(True)
+
+        self.list.setMaximumWidth(260)
+        self.commit_message.setMaximumWidth(260)
+
+        self.tabs = QtGui.QTabWidget()
+
+        self.list.currentRowChanged.connect(self.showCommit)
+
+        self.leftvBox = QtGui.QVBoxLayout()
+        self.leftvBox.addWidget(QtGui.QLabel('commits'))
+        self.leftvBox.addWidget(self.list)
+        self.leftvBox.addWidget(QtGui.QLabel('commit message'))
+        self.leftvBox.addWidget(self.commit_message)
+
+        self.rightvBox = QtGui.QVBoxLayout()
+        self.rightvBox.addWidget(self.tabs)
 
         self.hBox = QtGui.QHBoxLayout()
-        self.hBox.addWidget(self.list)
-        self.hBox.addWidget(self.tabs)
+        self.hBox.addLayout(self.leftvBox)
+        self.hBox.addLayout(self.rightvBox)
         self.setLayout(self.hBox)
+        self.list.setCurrentItem(self.list.item(0))
+        #self.callback(self.list.item(0))
 
 
-    def callback(self, commit_item):
+    def showCommit(self, commit_index):
+        commit_item = self.list.item(commit_index)
         if not self.curview == commit_item:
             self.curview = commit_item
             self.tabs.clear()
@@ -54,12 +73,17 @@ class MainWindow(QtGui.QWidget):
                     "'": "&apos;",
                     " ": "&nbsp;"
                     }
+            message = str(commit.message)
+            if message.split('\n')[0] == 'nsm-git':
+                message = message[9:].replace('\t','')
+            self.commit_message.setText(message)
             try:
                 diffs = commit.parents[0].diff(commit, create_patch=True)
                 for diff in diffs:
-                    if 'Carla' in diff.a_blob.name:
+                    blob_name = diff.a_blob.name if diff.a_blob else diff.b_blob.name
+                    if any(app in blob_name for app in ('Carla','Hydrogen')):
                         try:
-                            item = commit.tree[diff.a_blob.name]
+                            item = commit.tree[blob_name]
                             file_contents = SIO.StringIO()
                             item.stream_data(file_contents)
                             file_tree = ET.fromstring(file_contents.getvalue())
@@ -94,7 +118,7 @@ class MainWindow(QtGui.QWidget):
                     viewer = QtGui.QTextEdit()
                     viewer.setReadOnly(True)
                     viewer.setHtml(text)
-                    self.tabs.addTab(viewer, diff.a_blob.name)
+                    self.tabs.addTab(viewer, blob_name)
             except IndexError:
                 for item in commit.tree:
                     if item.name != '.gitignore':

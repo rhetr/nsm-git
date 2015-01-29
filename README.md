@@ -21,3 +21,4 @@ TODO
 ----
 * ensure this program actually works
 * work on the gui
+* figure out what to do with audio files and other non-text-based data (git-annex?)

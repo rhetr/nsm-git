@@ -1,9 +1,7 @@
 #!/usr/bin/env python
 
-import liblo, sys, os, time, datetime, subprocess, signal
+import liblo, sys, os, time, datetime, subprocess, signal, shutil
 import git
-
-
 
 class NSMGit(liblo.Server):
     def __init__(self):
@@ -16,11 +14,15 @@ class NSMGit(liblo.Server):
         self.add_method("/reply", 'ss', self.server_save_callback)
         self.add_method("/error", 'sis', self.error_callback)
         self.add_method(None, None, self.fallback)
+
         self.session_dir = None
         self.server_saved = False
         self.exit = False
         self.app = None
+
         self.NSM_URL = os.getenv('NSM_URL')
+        os.environ['GIT_AUTHOR_NAME'] = 'nsm-git'
+        os.environ['GIT_AUTHOR_EMAIL'] = 'noreply@nsm-git'
 
         if not self.NSM_URL:
            sys.exit()
@@ -73,14 +75,21 @@ class NSMGit(liblo.Server):
             self.exit = True
 
     def show_gui_callback(self, path, args):
+        if self.app:
+            if self.app.poll() == 0:
+                self.app = None
+            else:
+                print 'gui already shown'
+
         if not self.app:
             self.app = subprocess.Popen([os.path.join(self.executable_dir, 'nsm-git-ui'), self.session_dir],
                                         stdout=subprocess.PIPE,
                                         preexec_fn=os.setsid)
+            print 'showing gui', self.app.pid
 
     def hide_gui_callback(self, path, args):
         print 'hiding gui'
-        os.killpg(self.app, signal.SIGTERM)
+        os.killpg(self.app.pid, signal.SIGTERM)
         self.app = None
 
 
@@ -97,6 +106,7 @@ class NSMGit(liblo.Server):
         capabilities = ":message:optional-gui:"
         executable_name = os.path.realpath(__file__)
         self.executable_dir = os.path.dirname(executable_name)
+        executable_name = "nsm-git" # this leads to mostly correct behaviour, I don't know how to find the actual 'correct' value though
         pid = os.getpid()
         api_version_major = 1
         api_version_minor = 2
@@ -133,41 +143,53 @@ class NSMGit(liblo.Server):
         session_contents = os.listdir(self.session_dir)
         entries_to_remove = []
         for entry in session_contents:
-            if any(app in entry for app in ['Hydrogen','Carla']):
+            if any(app in entry for app in ['Hydrogen','Carla', 'Non-Mixer']):
                 entry_id = entry.split('.')[1]
                 if not entry_id in active_session:
                     print 'alert {} removed from session'.format(entry)
                     entries_to_remove.append(entry)
+                    if os.path.isdir(os.path.join(self.session_dir, entry)):
+                        shutil.rmtree(os.path.join(self.session_dir, entry))
         if entries_to_remove:
-            print 'a'
-            self.repo.index.remove(entries_to_remove, working_tree=True, force=True)
-            return True
+            try:
+                self.repo.index.remove(entries_to_remove, working_tree=True, force=True, r=True)
+                return entries_to_remove
+            except git.exc.GitCommandError, err:
+                print str(err)
+                return False
         else:
             return False
 
     def save(self):
-        changed = False
+        removed = untracked = updated = False
         self.init_repo()
 
         if not os.path.isfile(os.path.join(self.session_dir,'.gitignore')):
             with open(os.path.join(self.session_dir,'.gitignore'), 'wb') as gitignore:
-                gitignore.write('*.swp\n*.lock\n*autosave*')
+                gitignore.write('*.swp\n*.lock\n*autosave*\n.*')
 
-        removed = changed = self.remove_removed()
+        removed = self.remove_removed()
 
         if self.repo.is_dirty(untracked_files=True):
             print 'adding untracked files'
+            untracked = self.repo.untracked_files
             self.repo.index.add(self.repo.untracked_files)
-            changed = True
 
         if self.repo.git.diff(None):
-            print 'adding changed files'
-            self.repo.index.add([diff.a_blob.path for diff in self.repo.index.diff(None)])
-            changed = True
+            print 'adding updated files'
+            updated = [diff.a_blob.path for diff in self.repo.index.diff(None)]
+            self.repo.index.add(updated)
 
-        if changed:
+        if any((removed, untracked, updated)):
+            message = 'nsm-git'
+            if removed:
+                message += "\n\tremoved {}".format('\n\t        '.join(removed))
+            if untracked:
+                message += "\n\tadded {}".format('\n\t      '.join(untracked))
+            if updated:
+                message += "\n\tupdated {}".format('\n\t        '.join(updated))
+
             try:
-                message = "nsm-git commit, removed unused files" if removed else "nsm-git commit"
                 self.repo.index.commit(message)
                 print 'committed'
                 return True
