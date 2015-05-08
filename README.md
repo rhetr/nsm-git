@@ -16,10 +16,22 @@ USAGE
 -----
 make sure nsm-git and nsm-git-ui are in the same directory and then run nsm-git within NSM. you can open the UI by pressing the GUI button in the non-session-manager user interface.
 
-
 TODO/WISHLIST 
 -------------
-* differentiate between important versions and incremental updates
+* create a log file
+* create install script and configuration settings (don't know what the settings would at this point)
+* differentiate between important versions and incremental updates (git tags?)
+* include git manipulation features like checkout, revert, merge
+	* reverting things live? unlikely
+* delete stuff that isn't referenced in session.nsm
+	* move media files to junk folder pending manual deletion
 * add optional comments (possibly using git notes)
 * convert diff information to musical information
+	* use an xmldiff program instead of git-diff where appropriate
+	* patching and session changes can be visualized on an patchbay canvas
 * figure out what to do with audio files and other non-text-based data (git-annex?)
+
+CURRENT ISSUES
+--------------
+* verify the commits/changed files view is actually correct
+
