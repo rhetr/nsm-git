@@ -33,13 +33,13 @@ class NSMGit(liblo.Server):
     # callbacks
 
     def handshake_callback(self, path, args):
-        print 'received handshake'
+        self.log_write('received handshake')
 
     def open_callback(self, path, args):
         self.session_dir, self.display_name, self.client_id = args
         self.session_dir = os.path.split(self.session_dir)[0]
-        print "session dir is {}".format(self.session_dir)
-        print 'attempting to commit'
+        self.log_write("session dir is {}".format(self.session_dir))
+        self.log_write('attempting to commit')
         self.save()
         message = liblo.Message('/reply', "/nsm/client/open", 'done')
         liblo.send(self.NSM_URL, message)
@@ -49,13 +49,13 @@ class NSMGit(liblo.Server):
         self.server_saved = False
         message = liblo.Message('/reply', "/nsm/client/save", 'nsm-git is waiting to save')
         liblo.send(self.NSM_URL, message)
-        print 'save called. waiting...'
+        self.log_write('save called. waiting...')
         while not self.server_saved:
             s_d = datetime.datetime.now().second
             if s_d - s_c > 3:
                 message = liblo.Message("/nsm/client/message", 1, "nsm-git has waited long enough")
                 liblo.send(self.NSM_URL, message)
-                print 'nsm-git has waited long enough. saving...'
+                self.log_write('nsm-git has waited long enough. saving...')
                 break
             self.recv(50)
 
@@ -66,12 +66,12 @@ class NSMGit(liblo.Server):
 
     def server_save_callback(self, path, args):
         if args[0] == "/nsm/server/save" and args[1] == "Saved.":
-            print 'server callback received.'
+            self.log_write('server callback received.')
             self.server_saved = True
 
     def error_callback(self, path, args):
         if args[1] == -6:
-            print 'no session open'
+            self.log_write('no session open')
             self.exit = True
 
     def show_gui_callback(self, path, args):
@@ -79,24 +79,24 @@ class NSMGit(liblo.Server):
             if self.app.poll() == 0:
                 self.app = None
             else:
-                print 'gui already shown'
+                self.log_write('gui already shown')
 
         if not self.app:
             self.app = subprocess.Popen([os.path.join(self.executable_dir, 'nsm-git-ui'), self.session_dir],
                                         stdout=subprocess.PIPE,
                                         preexec_fn=os.setsid)
-            print 'showing gui', self.app.pid
+            self.log_write('showing gui with PID {}'.format(self.app.pid))
 
     def hide_gui_callback(self, path, args):
-        print 'hiding gui'
+        self.log_write('hiding gui')
         os.killpg(self.app.pid, signal.SIGTERM)
         self.app = None
 
 
     def fallback(self, path, args, types, src):
-        print "got unknown message '%s' from '%s'" % (path, src.url)
+        self.log_write("got unknown message '{}' from '{}'".format(path, src.url))
         for a, t in zip(args, types):
-            print "argument of type '%s': %s" % (t, a)
+            self.log_write("argument of type '{}': {}".format(t, a))
 
     # ---------------------------------------------------------------------
     # internal methods
@@ -122,6 +122,14 @@ class NSMGit(liblo.Server):
 
     # ---------------------------------------------------------------------
     # save methods
+
+    def log_write(self, text):
+        '''
+        outputs to nsm-git.log
+        '''
+        log_file = os.path.join(self.session_dir, 'nsm-git.log')
+        with open(log_file, 'ab') as log:
+            log.write(text)
         
     def init_repo(self):
         '''
@@ -129,10 +137,10 @@ class NSMGit(liblo.Server):
         '''
         try:
             self.repo = git.Repo(self.session_dir)
-            print 'opened git repo'
+            self.log_write('opened git repo')
         except git.exc.InvalidGitRepositoryError:
             self.repo = git.Repo.init(self.session_dir)
-            print 'created git repo'
+            self.log_write('created git repo')
 
     def remove_removed(self):
         '''
@@ -146,7 +154,7 @@ class NSMGit(liblo.Server):
             if any(app in entry for app in ['Hydrogen','Carla', 'Non-Mixer']):
                 entry_id = entry.split('.')[1]
                 if not entry_id in active_session:
-                    print 'alert {} removed from session'.format(entry)
+                    self.log_write('alert {} removed from session'.format(entry))
                     entries_to_remove.append(entry)
                     if os.path.isdir(os.path.join(self.session_dir, entry)):
                         shutil.rmtree(os.path.join(self.session_dir, entry))
@@ -155,7 +163,7 @@ class NSMGit(liblo.Server):
                 self.repo.index.remove(entries_to_remove, working_tree=True, force=True, r=True)
                 return entries_to_remove
             except git.exc.GitCommandError, err:
-                print str(err)
+                self.log_write(str(err))
                 return False
         else:
             return False
@@ -166,17 +174,17 @@ class NSMGit(liblo.Server):
 
         if not os.path.isfile(os.path.join(self.session_dir,'.gitignore')):
             with open(os.path.join(self.session_dir,'.gitignore'), 'wb') as gitignore:
-                gitignore.write('*.swp\n*.lock\n*autosave*\n.*')
+                gitignore.write('*.swp\n*.lock\n*autosave*\n.*\nnsm-git.log')
 
         removed = self.remove_removed()
 
         if self.repo.is_dirty(untracked_files=True):
-            print 'adding untracked files'
+            self.log_write('adding untracked files')
             untracked = self.repo.untracked_files
             self.repo.index.add(self.repo.untracked_files)
 
         if self.repo.git.diff(None):
-            print 'adding updated files'
+            self.log_write('adding updated files')
             updated = [diff.a_blob.path for diff in self.repo.index.diff(None)]
             self.repo.index.add(updated)
 
@@ -191,20 +199,20 @@ class NSMGit(liblo.Server):
 
             try:
                 self.repo.index.commit(message)
-                print 'committed'
+                self.log_write('committed')
                 return True
             except git.exc.GitCommandError, err:
-                print str(err)
+                self.log_write(str(err))
                 return False
         else:
-            print 'nothing to be done'
+            self.log_write('nothing to be done')
             return False
 
 
 try:
     nsm_git = NSMGit()
 except liblo.ServerError, err:
-    print str(err)
+    print(str(err))
     sys.exit()
 
 while True:
