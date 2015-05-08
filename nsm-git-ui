@@ -85,7 +85,7 @@ class MainWindow(QtGui.QWidget):
         try:
             self.diffs = commit.parents[0].diff(commit, create_patch=True)
             for diff in self.diffs:
-                status_color = (QtCore.Qt.green, QtCore.Qt.red, QtCore.Qt.cyan)
+                status_color = (QtCore.Qt.green, QtCore.Qt.red, QtCore.Qt.black)
                 if diff.new_file:
                     status = 0
                     blob = diff.b_blob
