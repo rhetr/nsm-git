@@ -4,6 +4,9 @@ import liblo, sys, os, time, datetime, subprocess, signal, shutil
 import git
 from PyQt4 import QtGui, QtCore
 
+GUI_HIDDEN = liblo.Message('/nsm/client/gui_is_hidden')
+GUI_SHOWN = liblo.Message('/nsm/client/gui_is_shown')
+
 class NSMGitServerThread(QtCore.QObject):
     finished = QtCore.pyqtSignal()
     def __init__(self):
@@ -19,17 +22,13 @@ class NSMGitServerThread(QtCore.QObject):
 class UISignal(QtCore.QObject):
     visible = QtCore.pyqtSignal(bool)
 
-    def run(self):
-        super(NSMGitServer, self).__init__()
-        self.handshake()
-
-
 class NSMGitServer(liblo.Server):
     def __init__(self):
         super(NSMGitServer, self).__init__()
         self.add_method("/reply", 'ssss', self.handshake_callback)
         self.add_method("/nsm/client/open", 'sss', self.open_callback)
         self.add_method("/nsm/client/save", None, self.save_callback)
+        self.add_method("/nsm-git/save", None, self.popup_save_callback)
 
         self.ui_signal = UISignal()
         self.ui_visible = self.ui_signal.visible
@@ -68,13 +67,14 @@ class NSMGitServer(liblo.Server):
         message = "{} says: {}".format(args[2], args[1])
         self.log_write('received handshake')
         self.log_write(message)
+        liblo.send(self.NSM_URL, GUI_HIDDEN)
 
     def open_callback(self, path, args):
         self.session_dir, self.display_name, self.client_id = args
         self.session_dir = os.path.split(self.session_dir)[0]
         self.begin_logging()
         self.log_write("session dir is {}".format(self.session_dir))
-        self.log_write('attempting to commit')
+        self.log_write('attempting to commit... ', False)
         self.save()
         message = liblo.Message('/reply', "/nsm/client/open", 'done')
         liblo.send(self.NSM_URL, message)
@@ -84,7 +84,7 @@ class NSMGitServer(liblo.Server):
         self.server_saved = False
         message = liblo.Message('/reply', "/nsm/client/save", 'nsm-git is waiting to save')
         liblo.send(self.NSM_URL, message)
-        self.log_write('save called. waiting...')
+        self.log_write('save called. waiting...', False)
         while not self.server_saved:
             s_d = datetime.datetime.now().second
             if s_d - s_c > 3:
@@ -99,6 +99,10 @@ class NSMGitServer(liblo.Server):
         message = liblo.Message("/nsm/client/message", 1, msg)
         liblo.send(self.NSM_URL, message)
 
+    def popup_save_callback(self, path, args):
+        # will open a popup dialog to write a save message
+        pass
+
     def server_save_callback(self, path, args):
         if args[0] == "/nsm/server/save" and args[1] == "Saved.":
             self.log_write('server callback received.')
@@ -111,9 +115,11 @@ class NSMGitServer(liblo.Server):
 
     def show_gui_callback(self, path, args):
         self.ui_visible.emit(True)
+        liblo.send(GUI_SHOWN)
 
     def hide_gui_callback(self, path, args):
         self.ui_visible.emit(False)
+        liblo.send(GUI_HIDDEN)
 
     def fallback(self, path, args, types, src):
         self.log_write("got unknown message '{}' from '{}'".format(path, src.url))
@@ -147,14 +153,18 @@ class NSMGitServer(liblo.Server):
 
     def begin_logging(self):
         self.log_file = os.path.join(self.session_dir, 'nsm-git.log')
+        self.log_write('==================================')
+        self.log_write('begin log')
+        self.log_write('server capabilities: {}'.format(self.capabilities))
 
-    def log_write(self, text):
+    def log_write(self, text, newline=True):
         '''
         outputs to nsm-git.log
         '''
         if self.log_file:
+            text = str(text) + '\n' if newline else str(text)
             with open(self.log_file, 'a') as log:
-                log.write(str(text))
+                log.write(text)
         
     def init_repo(self):
         '''
@@ -162,10 +172,10 @@ class NSMGitServer(liblo.Server):
         '''
         try:
             self.repo = git.Repo(self.session_dir)
-            self.log_write('opened git repo')
+            self.log_write('opened git repo... ', False)
         except git.exc.InvalidGitRepositoryError:
             self.repo = git.Repo.init(self.session_dir)
-            self.log_write('created git repo')
+            self.log_write('created git repo... ', False)
 
     def remove_removed(self):
         '''
@@ -193,8 +203,14 @@ class NSMGitServer(liblo.Server):
         else:
             return False
 
+    #def save_port_list(self):
+    #    ports = subprocess.check_output("jack_lsp", shell = True)
+    #    with open(os.path.join(self.session_dir,'jack_lsp'), 'w') as jack_lsp:
+    #        jack_lsp.write(ports)
+
     def save(self):
         removed = untracked = updated = False
+        self.save_port_list()
         self.init_repo()
 
         if not os.path.isfile(os.path.join(self.session_dir,'.gitignore')):
@@ -224,12 +240,12 @@ class NSMGitServer(liblo.Server):
 
             try:
                 self.repo.index.commit(message)
-                self.log_write('committed')
+                self.log_write('committed.')
                 return True
             except git.exc.GitCommandError, err:
                 self.log_write(str(err))
                 return False
         else:
-            self.log_write('nothing to be done')
+            self.log_write('nothing to be done.')
             return False
 
