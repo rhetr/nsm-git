@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# filename: nsm-git-ui
 
 import os
 import time, datetime
@@ -33,12 +32,20 @@ class CommitList(QtGui.QListWidget):
         for c in commits:
             self.addItem(Commit(c))
 
-class MainWindow(QtGui.QWidget):
-    def __init__(self, repo):
+class NSMGitUI(QtGui.QWidget):
+    finished = QtCore.pyqtSignal()
+    def __init__(self, repo=None):
         QtGui.QWidget.__init__(self)
         self.curr_commit = None
         self.curr_diff = None
+        if repo:
+            self._initUI(repo)
 
+    def closeEvent(self, event):
+        event.ignore()
+        self.hide()
+    
+    def _initUI(self, repo):
         self.list = CommitList(git.Repo(repo))
         #self.commit_notes = QtGui.QPlainTextEdit()
         self.file_list = QtGui.QListWidget()
@@ -134,6 +141,6 @@ if __name__ == '__main__':
     app = QtGui.QApplication(sys.argv)
     if len(sys.argv) > 1:
         print sys.argv[1]
-        main = MainWindow(sys.argv[1])
+        main = NSMGitUI(sys.argv[1])
         main.show()
         sys.exit(app.exec_())

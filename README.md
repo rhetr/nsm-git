@@ -14,7 +14,7 @@ Requirements
 
 USAGE
 -----
-make sure nsm-git and nsm-git-ui are in the same directory and then run nsm-git within NSM. you can open the UI by pressing the GUI button in the non-session-manager user interface.
+run nsm-git within NSM. you can open the UI by pressing the GUI button in the non-session-manager user interface.
 
 TODO/WISHLIST 
 -------------
