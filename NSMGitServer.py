@@ -19,8 +19,9 @@ class NSMGitServerThread(QtCore.QObject):
         self.timer.start(100)
         self.timer.timeout.connect(self.server.recv)
 
-class UISignal(QtCore.QObject):
+class NSMGitServerSignal(QtCore.QObject):
     visible = QtCore.pyqtSignal(bool)
+    loaded = QtCore.pyqtSignal(str)
 
 class NSMGitServer(liblo.Server):
     def __init__(self):
@@ -30,8 +31,10 @@ class NSMGitServer(liblo.Server):
         self.add_method("/nsm/client/save", None, self.save_callback)
         self.add_method("/nsm-git/save", None, self.popup_save_callback)
 
-        self.ui_signal = UISignal()
-        self.ui_visible = self.ui_signal.visible
+        self.qtsignal = NSMGitServerSignal()
+        self.ui_visible = self.qtsignal.visible
+        self.loaded = self.qtsignal.loaded
+
         self.add_method("/nsm/client/show_optional_gui", None, self.show_gui_callback)
         self.add_method("/nsm/client/hide_optional_gui", None, self.hide_gui_callback)
         self.add_method("/reply", 'ss', self.server_save_callback)
@@ -52,11 +55,7 @@ class NSMGitServer(liblo.Server):
         if not self.NSM_URL:
             print("NSM_URL isn't set")
 
-        self.handshake()
-
-        #self.timer = QtCore.QTimer()
-        #self.timer.start(100)
-        #self.timer.timeout.connect(self.recv)
+        #self.handshake()
 
     # ---------------------------------------------------------------------
     # callbacks
@@ -76,6 +75,7 @@ class NSMGitServer(liblo.Server):
         self.log_write("session dir is {}".format(self.session_dir))
         self.log_write('attempting to commit... ', False)
         self.save()
+        self.loaded.emit(self.session_dir)
         message = liblo.Message('/reply', "/nsm/client/open", 'done')
         liblo.send(self.NSM_URL, message)
 
@@ -115,11 +115,11 @@ class NSMGitServer(liblo.Server):
 
     def show_gui_callback(self, path, args):
         self.ui_visible.emit(True)
-        liblo.send(GUI_SHOWN)
+        liblo.send(self.NSM_URL, GUI_SHOWN)
 
-    def hide_gui_callback(self, path, args):
+    def hide_gui_callback(self, path=None, args=None):
         self.ui_visible.emit(False)
-        liblo.send(GUI_HIDDEN)
+        liblo.send(self.NSM_URL, GUI_HIDDEN)
 
     def fallback(self, path, args, types, src):
         self.log_write("got unknown message '{}' from '{}'".format(path, src.url))
@@ -203,10 +203,11 @@ class NSMGitServer(liblo.Server):
         else:
             return False
 
-    #def save_port_list(self):
-    #    ports = subprocess.check_output("jack_lsp", shell = True)
-    #    with open(os.path.join(self.session_dir,'jack_lsp'), 'w') as jack_lsp:
-    #        jack_lsp.write(ports)
+    def save_port_list(self):
+        pass
+        #ports = subprocess.check_output("jack_lsp", shell = True)
+        #with open(os.path.join(self.session_dir,'jack_lsp'), 'w') as jack_lsp:
+        #    jack_lsp.write(ports)
 
     def save(self):
         removed = untracked = updated = False

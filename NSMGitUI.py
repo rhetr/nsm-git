@@ -23,7 +23,6 @@ class Commit(QtGui.QListWidgetItem):
         date = date.strftime('%a %b %d %I:%M %p %Y')
         self.setText('{}...\t{}'.format(str(self.commit)[:7], date))
 
-
 class CommitList(QtGui.QListWidget):
     def __init__(self, repo):
         QtGui.QListWidget.__init__(self)
@@ -33,19 +32,15 @@ class CommitList(QtGui.QListWidget):
             self.addItem(Commit(c))
 
 class NSMGitUI(QtGui.QWidget):
-    finished = QtCore.pyqtSignal()
+    closed = QtCore.pyqtSignal()
     def __init__(self, repo=None):
         QtGui.QWidget.__init__(self)
         self.curr_commit = None
         self.curr_diff = None
         if repo:
-            self._initUI(repo)
+            self.initUI(repo)
 
-    def closeEvent(self, event):
-        event.ignore()
-        self.hide()
-    
-    def _initUI(self, repo):
+    def initUI(self, repo):
         self.list = CommitList(git.Repo(repo))
         #self.commit_notes = QtGui.QPlainTextEdit()
         self.file_list = QtGui.QListWidget()
@@ -77,6 +72,10 @@ class NSMGitUI(QtGui.QWidget):
         self.setLayout(self.hBox)
         self.list.setCurrentRow(0)
 
+    def closeEvent(self, event):
+        event.ignore()
+        self.hide()
+        self.closed.emit()
 
     def showCommit(self, commit_index):
         commit_item = self.list.item(commit_index)

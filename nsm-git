@@ -7,8 +7,6 @@ import time
 
 class Main:
     def __init__(self):
-        self.ui = NSMGitUI()
-
         self.nsm_git_thread = QtCore.QThread()
         self.nsm_git = NSMGitServerThread()
         self.nsm_git.moveToThread(self.nsm_git_thread)
@@ -17,14 +15,20 @@ class Main:
         
         while not self.nsm_git.server:
             time.sleep(1)
-        while not self.nsm_git.server.session_dir:
-            time.sleep(1)
 
-        self.ui._initUI(self.nsm_git.server.session_dir)
+        self.ui = NSMGitUI()
+        self.ui.closed.connect(self.windowClosed)
+        self.nsm_git.server.loaded.connect(self.initUI)
         self.nsm_git.server.ui_visible.connect(self.ui.setVisible)
+        self.nsm_git.server.handshake()
+
+    def initUI(self, repo):
+        self.ui.initUI(str(repo))
+
+    def windowClosed(self):
+        self.nsm_git.server.hide_gui_callback()
 
 if __name__ == '__main__':
-
     import sys
 
     app = QtGui.QApplication(sys.argv)
