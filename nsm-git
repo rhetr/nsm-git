@@ -20,6 +20,7 @@ class Main:
         self.ui.closed.connect(self.windowClosed)
         self.nsm_git.server.loaded.connect(self.initUI)
         self.nsm_git.server.ui_visible.connect(self.ui.setVisible)
+        self.nsm_git.server.saved.connect(self.ui.refreshRepo)
         self.nsm_git.server.handshake()
 
     def initUI(self, repo):

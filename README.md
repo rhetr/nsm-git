@@ -18,7 +18,6 @@ run nsm-git within NSM. you can open the UI by pressing the GUI button in the no
 
 TODO/WISHLIST 
 -------------
-* create a log file
 * create install script and configuration settings (don't know what the settings would at this point)
 * differentiate between important versions and incremental updates (git tags?)
 * include git manipulation features like checkout, revert, merge
@@ -34,4 +33,5 @@ TODO/WISHLIST
 CURRENT ISSUES
 --------------
 * verify the commits/changed files view is actually correct
-
+* folders act weird sometimes
+* nsm-git doesn't load when a session is restored and I don't know why

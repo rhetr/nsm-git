@@ -27,6 +27,10 @@ class CommitList(QtGui.QListWidget):
     def __init__(self, repo):
         QtGui.QListWidget.__init__(self)
         self.repo = repo
+        self.refreshRepo()
+
+    def refreshRepo(self):
+        self.clear()
         commits = list(self.repo.iter_commits())
         for c in commits:
             self.addItem(Commit(c))
@@ -37,6 +41,7 @@ class NSMGitUI(QtGui.QWidget):
         QtGui.QWidget.__init__(self)
         self.curr_commit = None
         self.curr_diff = None
+        self.list = None
         if repo:
             self.initUI(repo)
 
@@ -71,6 +76,15 @@ class NSMGitUI(QtGui.QWidget):
         self.hBox.addLayout(self.rightvBox)
         self.setLayout(self.hBox)
         self.list.setCurrentRow(0)
+
+    def refreshRepo(self):
+        if self.list:
+            self.list.refreshRepo()
+            self.list.setCurrentRow(0)
+
+    def showEvent(self, event):
+        self.refreshRepo()
+        super(NSMGitUI, self).showEvent(event)
 
     def closeEvent(self, event):
         event.ignore()

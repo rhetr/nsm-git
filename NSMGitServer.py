@@ -22,6 +22,7 @@ class NSMGitServerThread(QtCore.QObject):
 class NSMGitServerSignal(QtCore.QObject):
     visible = QtCore.pyqtSignal(bool)
     loaded = QtCore.pyqtSignal(str)
+    saved = QtCore.pyqtSignal()
 
 class NSMGitServer(liblo.Server):
     def __init__(self):
@@ -34,6 +35,7 @@ class NSMGitServer(liblo.Server):
         self.qtsignal = NSMGitServerSignal()
         self.ui_visible = self.qtsignal.visible
         self.loaded = self.qtsignal.loaded
+        self.saved = self.qtsignal.saved
 
         self.add_method("/nsm/client/show_optional_gui", None, self.show_gui_callback)
         self.add_method("/nsm/client/hide_optional_gui", None, self.hide_gui_callback)
@@ -98,6 +100,7 @@ class NSMGitServer(liblo.Server):
         msg = "nsm-git has committed" if saved else "nothing for nsm-git to commit"
         message = liblo.Message("/nsm/client/message", 1, msg)
         liblo.send(self.NSM_URL, message)
+        self.saved.emit()
 
     def popup_save_callback(self, path, args):
         # will open a popup dialog to write a save message
